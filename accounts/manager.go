@@ -1,61 +1,40 @@
 package accounts
 
 import (
-	"reflect"
-	"sync"
-
 	ethaccounts "github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/event"
 )
+
+// managerSubBufferSize determines how many incoming wallet events
+// the manager will buffer in its channel.
+const managerSubBufferSize = 50
 
 // Manager is an overarching account manager that can communicate with various
 // backends for signing transactions.
 type Manager struct {
-	config      *ethaccounts.Config        // Global account manager configurations
-	backends    map[reflect.Type][]Backend // Index of backends currently registered
-	updaters    []event.Subscription       // Wallet update subscriptions for all backends
-	updates     chan WalletEvent           // Subscription sink for backend wallet changes
-	newBackends chan newBackendEvent       // Incoming backends to be tracked by the manager
-	wallets     []Wallet                   // Cache of all wallets from all registered backends
-
-	feed event.Feed // Wallet feed notifying of arrivals/departures
-
-	quit chan chan error
-	term chan struct{} // Channel is closed upon termination of the update loop
-	lock sync.RWMutex
+	*ethaccounts.Manager
+	filBackends []Backend
 }
 
 // NewManager creates a generic account manager to sign transaction via various
 // supported backends.
-func NewManager(config *ethaccounts.Config, backends ...Backend) *Manager {
-	// Retrieve the initial list of wallets from the backends and sort by URL
-	var wallets []Wallet
-	for _, backend := range backends {
-		wallets = merge(wallets, backend.Wallets()...)
+func NewManager(config *ethaccounts.Config, backends []ethaccounts.Backend, filbackends []Backend) *Manager {
+	ethManager := ethaccounts.NewManager(config, backends...)
+	manager := Manager{
+		Manager:     ethManager,
+		filBackends: filbackends,
 	}
-	// Subscribe to wallet notifications from all backends
-	updates := make(chan WalletEvent, managerSubBufferSize)
+	return &manager
+}
 
-	subs := make([]event.Subscription, len(backends))
-	for i, backend := range backends {
-		subs[i] = backend.Subscribe(updates)
+// Find attempts to locate the wallet corresponding to a specific account. Since
+// accounts can be dynamically added to and removed from wallets, this method has
+// a linear runtime in the number of wallets.
+func (am *Manager) Find(account Account) (Wallet, error) {
+	ethWallet, err := am.Manager.Find(account.EthAccount)
+	if err != nil {
+		// FIXME: Try Filecoin lookup
+		return nil, err
 	}
-	// Assemble the account manager and return
-	am := &Manager{
-		config:      config,
-		backends:    make(map[reflect.Type][]Backend),
-		updaters:    subs,
-		updates:     updates,
-		newBackends: make(chan newBackendEvent),
-		wallets:     wallets,
-		quit:        make(chan chan error),
-		term:        make(chan struct{}),
-	}
-	for _, backend := range backends {
-		kind := reflect.TypeOf(backend)
-		am.backends[kind] = append(am.backends[kind], backend)
-	}
-	go am.update()
-
-	return am
+	wrappedEthWallet := EthWallet{ethWallet}
+	return wrappedEthWallet, nil
 }
