@@ -5,6 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
+	ethaccounts "github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/filecoin-project/go-address"
@@ -21,7 +22,7 @@ type Wallet interface {
 	// URL retrieves the canonical path under which this wallet is reachable. It is
 	// used by upper layers to define a sorting order over all wallets from multiple
 	// backends.
-	URL() accounts.URL
+	URL() ethaccounts.URL
 
 	// Status returns a textual status to aid the user in the current state of the
 	// wallet. It also returns an error indicating any failure the wallet might have
@@ -55,7 +56,7 @@ type Wallet interface {
 	// Derive attempts to explicitly derive a hierarchical deterministic account at
 	// the specified derivation path. If requested, the derived account will be added
 	// to the wallet's tracked account list.
-	Derive(path accounts.DerivationPath, pin bool) (Account, error)
+	Derive(path ethaccounts.DerivationPath, pin bool) (Account, error)
 
 	// SelfDerive sets a base account derivation path from which the wallet attempts
 	// to discover non zero accounts and automatically add them to list of tracked
@@ -71,7 +72,7 @@ type Wallet interface {
 	//
 	// You can disable automatic account discovery by calling SelfDerive with a nil
 	// chain state reader.
-	SelfDerive(bases []accounts.DerivationPath, chain ethereum.ChainStateReader)
+	SelfDerive(bases []ethaccounts.DerivationPath, chain ethereum.ChainStateReader)
 
 	// SignData requests the wallet to sign the hash of the given data
 	// It looks up the account specified either solely via its address contained within,
@@ -143,5 +144,5 @@ type Backend interface {
 
 	// Subscribe creates an async subscription to receive notifications when the
 	// backend detects the arrival or departure of a wallet.
-	Subscribe(sink chan<- accounts.WalletEvent) event.Subscription
+	Subscribe(sink chan<- ethaccounts.WalletEvent) event.Subscription
 }

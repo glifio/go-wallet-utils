@@ -4,14 +4,14 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/accounts"
+	ethaccounts "github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/event"
 )
 
 // Manager is an overarching account manager that can communicate with various
 // backends for signing transactions.
 type Manager struct {
-	config      *accounts.Config           // Global account manager configurations
+	config      *ethaccounts.Config        // Global account manager configurations
 	backends    map[reflect.Type][]Backend // Index of backends currently registered
 	updaters    []event.Subscription       // Wallet update subscriptions for all backends
 	updates     chan WalletEvent           // Subscription sink for backend wallet changes
@@ -27,7 +27,7 @@ type Manager struct {
 
 // NewManager creates a generic account manager to sign transaction via various
 // supported backends.
-func NewManager(config *accounts.Config, backends ...Backend) *Manager {
+func NewManager(config *ethaccounts.Config, backends ...Backend) *Manager {
 	// Retrieve the initial list of wallets from the backends and sort by URL
 	var wallets []Wallet
 	for _, backend := range backends {
