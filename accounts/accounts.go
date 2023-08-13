@@ -2,8 +2,10 @@ package accounts
 
 import (
 	"math/big"
+	"reflect"
 
 	ethaccounts "github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/filecoin-project/go-address"
@@ -14,18 +16,38 @@ type Account struct {
 	FilAddress address.Address
 }
 
+func (a Account) IsEth() bool {
+	zeroAddressBytes := common.FromHex("0x0000000000000000000000000000000000000000")
+	addressBytes := a.EthAccount.Address.Bytes()
+	return !reflect.DeepEqual(addressBytes, zeroAddressBytes)
+}
+
+func (a Account) IsFil() bool {
+	return !a.FilAddress.Empty()
+}
+
+func (a Account) String() string {
+	if a.IsEth() {
+		return a.EthAccount.Address.String()
+	}
+	if a.IsFil() {
+		return a.FilAddress.String()
+	}
+	return ""
+}
+
 // Wallet represents a software or hardware wallet that might contain one or more
 // accounts (derived from the same seed).
 type Wallet interface {
 	// URL retrieves the canonical path under which this wallet is reachable. It is
 	// used by upper layers to define a sorting order over all wallets from multiple
 	// backends.
-	URL() ethaccounts.URL
+	// URL() ethaccounts.URL
 
 	// Status returns a textual status to aid the user in the current state of the
 	// wallet. It also returns an error indicating any failure the wallet might have
 	// encountered.
-	Status() (string, error)
+	// Status() (string, error)
 
 	// Open initializes access to a wallet instance. It is not meant to unlock or
 	// decrypt account keys, rather simply to establish a connection to hardware
@@ -38,10 +60,10 @@ type Wallet interface {
 	//
 	// Please note, if you open a wallet, you must close it to release any allocated
 	// resources (especially important when working with hardware wallets).
-	Open(passphrase string) error
+	// Open(passphrase string) error
 
 	// Close releases any resources held by an open wallet instance.
-	Close() error
+	// Close() error
 
 	// Accounts retrieves the list of signing accounts the wallet is currently aware
 	// of. For hierarchical deterministic wallets, the list will not be exhaustive,
