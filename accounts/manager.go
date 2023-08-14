@@ -1,6 +1,8 @@
 package accounts
 
 import (
+	"fmt"
+
 	ethaccounts "github.com/ethereum/go-ethereum/accounts"
 )
 
@@ -30,11 +32,23 @@ func NewManager(config *ethaccounts.Config, backends []ethaccounts.Backend, filb
 // accounts can be dynamically added to and removed from wallets, this method has
 // a linear runtime in the number of wallets.
 func (am *Manager) Find(account Account) (Wallet, error) {
-	ethWallet, err := am.Manager.Find(account.EthAccount)
-	if err != nil {
-		// FIXME: Try Filecoin lookup
-		return nil, err
+	if account.IsEth() {
+		ethWallet, err := am.Manager.Find(account.EthAccount)
+		if err != nil {
+			return nil, err
+		}
+		wrappedEthWallet := EthWallet{ethWallet}
+		return wrappedEthWallet, nil
+	} else {
+		for _, backend := range am.filBackends {
+			for _, wallet := range backend.Wallets() {
+				for _, walletAccount := range wallet.Accounts() {
+					if walletAccount.FilAddress == account.FilAddress {
+						return wallet, nil
+					}
+				}
+			}
+		}
 	}
-	wrappedEthWallet := EthWallet{ethWallet}
-	return wrappedEthWallet, nil
+	return nil, fmt.Errorf("account not found in backends")
 }

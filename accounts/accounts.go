@@ -7,7 +7,6 @@ import (
 	ethaccounts "github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/event"
 	"github.com/filecoin-project/go-address"
 )
 
@@ -164,5 +163,5 @@ type Backend interface {
 
 	// Subscribe creates an async subscription to receive notifications when the
 	// backend detects the arrival or departure of a wallet.
-	Subscribe(sink chan<- ethaccounts.WalletEvent) event.Subscription
+	// Subscribe(sink chan<- ethaccounts.WalletEvent) event.Subscription
 }
