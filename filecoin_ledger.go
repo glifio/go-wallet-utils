@@ -22,7 +22,6 @@ import (
 // options for use with the Lotus JSON-RPC API and a Ledger USB Wallet with
 // the Filecoin app.
 func NewFilecoinLedgerTransactor(ctx context.Context, api *lotusapi.FullNodeStruct, client *ethclient.Client, from address.Address) (*WrappedEthClient, *bind.TransactOpts, error) {
-
 	wrappedClientImpl := WrappedEthClientForFilLedger{
 		from:            from,
 		api:             api,

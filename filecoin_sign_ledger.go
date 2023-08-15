@@ -27,15 +27,15 @@ func SignMsgLedger(msg *types.Message) (*types.SignedMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("Message: %x\n", b.RawData())
+	// fmt.Printf("Message: %x\n", b.RawData())
 
 	sig, err := fl.SignSECP256K1(p, b.RawData())
 	if err != nil {
 		return nil, err
 	}
 
-	sigBytes := append([]byte{byte(crypto.SigTypeSecp256k1)}, sig.SignatureBytes()...)
-	fmt.Printf("Signature: %x\n", sigBytes)
+	// sigBytes := append([]byte{byte(crypto.SigTypeSecp256k1)}, sig.SignatureBytes()...)
+	// fmt.Printf("Signature: %x\n", sigBytes)
 
 	return &types.SignedMessage{
 		Message: *msg,

@@ -47,6 +47,11 @@ func NewLedgerHub() (*Hub, error) {
 		wallets:   []accounts.Wallet{wallet},
 	}
 
+	err = ledgerFil.Close()
+	if err != nil {
+		return nil, err
+	}
+
 	return &hub, nil
 }
 
