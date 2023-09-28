@@ -19,7 +19,6 @@ type Hub struct {
 
 // NewLedgerHub creates a new hardware wallet manager for Ledger devices.
 func NewLedgerHub() (*Hub, error) {
-	fmt.Println("Jim go-wallet-utils NewLedgerHub")
 	ledgerFil, err := ledgerfil.FindLedgerFilecoinApp()
 	if err != nil {
 		return nil, err
