@@ -1,6 +1,7 @@
 package accounts
 
 import (
+	"fmt"
 	"math/big"
 
 	ethaccounts "github.com/ethereum/go-ethereum/accounts"
@@ -22,6 +23,11 @@ func (ew EthWallet) Accounts() []Account {
 }
 
 // SignTxWithPassphrase signs the transaction
-func (eq EthWallet) SignTxWithPassphrase(a Account, passphrase string, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
-	return eq.Wallet.SignTxWithPassphrase(a.EthAccount, passphrase, tx, chainID)
+func (ew EthWallet) SignTxWithPassphrase(a Account, passphrase string, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
+	return ew.Wallet.SignTxWithPassphrase(a.EthAccount, passphrase, tx, chainID)
+}
+
+// GetPrivateKeyBytes returns the private key bytes if available
+func (ew EthWallet) GetPrivateKeyBytes(account Account, passphrase string) (privateKey []byte, err error) {
+	return []byte{}, fmt.Errorf("not implemented")
 }

@@ -74,3 +74,8 @@ func (fw FilLedgerWallet) Accounts() []accounts.Account {
 func (fw FilLedgerWallet) SignTxWithPassphrase(a accounts.Account, passphrase string, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
 	return nil, fmt.Errorf("not implemented")
 }
+
+// GetPrivateKeyBytes returns the private key bytes if available
+func (fw FilLedgerWallet) GetPrivateKeyBytes(account accounts.Account, passphrase string) (privateKey []byte, err error) {
+	return []byte{}, fmt.Errorf("not implemented")
+}

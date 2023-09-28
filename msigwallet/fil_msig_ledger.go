@@ -68,6 +68,11 @@ func (fw FilMsigLedgerWallet) SignTxWithPassphrase(a accounts.Account, passphras
 	return nil, fmt.Errorf("not implemented")
 }
 
+// GetPrivateKeyBytes returns the private key bytes if available
+func (fw FilMsigLedgerWallet) GetPrivateKeyBytes(account accounts.Account, passphrase string) (privateKey []byte, err error) {
+	return []byte{}, fmt.Errorf("not implemented")
+}
+
 // GetProposerPrivateKey returns the Filecoin private key for the proposer account
 func (fw FilMsigLedgerWallet) GetProposerPrivateKey() (privateKey []byte, err error) {
 	fmt.Println("Jim GetProposerPrivateKey")

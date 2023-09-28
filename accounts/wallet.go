@@ -2,38 +2,9 @@ package accounts
 
 import (
 	"math/big"
-	"reflect"
 
-	ethaccounts "github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/filecoin-project/go-address"
 )
-
-type Account struct {
-	EthAccount ethaccounts.Account
-	FilAddress address.Address
-}
-
-func (a Account) IsEth() bool {
-	zeroAddressBytes := common.FromHex("0x0000000000000000000000000000000000000000")
-	addressBytes := a.EthAccount.Address.Bytes()
-	return !reflect.DeepEqual(addressBytes, zeroAddressBytes)
-}
-
-func (a Account) IsFil() bool {
-	return !a.FilAddress.Empty()
-}
-
-func (a Account) String() string {
-	if a.IsEth() {
-		return a.EthAccount.Address.String()
-	}
-	if a.IsFil() {
-		return a.FilAddress.String()
-	}
-	return ""
-}
 
 // Wallet represents a software or hardware wallet that might contain one or more
 // accounts (derived from the same seed).
@@ -144,24 +115,7 @@ type Wallet interface {
 
 	// SignTxWithPassphrase is identical to SignTx, but also takes a password
 	SignTxWithPassphrase(account Account, passphrase string, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error)
-}
 
-// Backend is a "wallet provider" that may contain a batch of accounts they can
-// sign transactions with and upon request, do so.
-type Backend interface {
-	// Wallets retrieves the list of wallets the backend is currently aware of.
-	//
-	// The returned wallets are not opened by default. For software HD wallets this
-	// means that no base seeds are decrypted, and for hardware wallets that no actual
-	// connection is established.
-	//
-	// The resulting wallet list will be sorted alphabetically based on its internal
-	// URL assigned by the backend. Since wallets (especially hardware) may come and
-	// go, the same wallet might appear at a different positions in the list during
-	// subsequent retrievals.
-	Wallets() []Wallet
-
-	// Subscribe creates an async subscription to receive notifications when the
-	// backend detects the arrival or departure of a wallet.
-	// Subscribe(sink chan<- ethaccounts.WalletEvent) event.Subscription
+	// GetPrivateKeyBytes returns the private key bytes if available
+	GetPrivateKeyBytes(account Account, passphrase string) (privateKey []byte, err error)
 }
