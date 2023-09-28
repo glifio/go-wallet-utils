@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/api"
 	lotustypes "github.com/filecoin-project/lotus/chain/types"
 	"github.com/glifio/go-wallet-utils/accounts"
@@ -24,6 +25,8 @@ func NewWalletTransactor(
 	wallet accounts.Wallet,
 	account *accounts.Account,
 	passphrase string,
+	proposer address.Address,
+	approver address.Address,
 	chainID *big.Int,
 ) (*WrappedEthClient, *bind.TransactOpts, error) {
 	if chainID == nil {
