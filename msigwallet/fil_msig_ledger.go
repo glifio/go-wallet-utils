@@ -69,6 +69,28 @@ func (fw FilMsigLedgerWallet) SignTxWithPassphrase(a accounts.Account, passphras
 }
 
 // GetProposerPrivateKey returns the Filecoin private key for the proposer account
-func (fw FilMsigLedgerWallet) GetProposerPrivateKey() {
-	// FIXME - lookup using manager
+func (fw FilMsigLedgerWallet) GetProposerPrivateKey() (privateKey []byte, err error) {
+	fmt.Println("Jim GetProposerPrivateKey")
+	acct := accounts.Account{FilAddress: fw.proposer}
+
+	wallet, err := fw.manager.Find(acct)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	fmt.Println("Jim GetProposerPrivateKey", wallet)
+
+	return []byte{}, nil
+
+	/*
+		ownerProposerKeyJSON, err := ks.Export(ksOwnerProposer, "", "")
+		if err != nil {
+			logFatal(err)
+		}
+		opk, err := keystore.DecryptKey(ownerProposerKeyJSON, "")
+		if err != nil {
+			logFatal(err)
+		}
+		opkPrivateKeyBytes := crypto.FromECDSA(opk.PrivateKey)
+	*/
 }

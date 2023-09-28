@@ -3,6 +3,7 @@ package walletutils
 import (
 	"bytes"
 	"context"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -10,23 +11,28 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/filecoin-project/go-address"
-	lotusbig "github.com/filecoin-project/go-state-types/big"
+	filbig "github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-state-types/builtin"
 	builtintypes "github.com/filecoin-project/go-state-types/builtin"
 	lotusapi "github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/chain/actors"
 	lotustypes "github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/types/ethtypes"
+	multisig0 "github.com/filecoin-project/specs-actors/actors/builtin/multisig"
 	cbg "github.com/whyrusleeping/cbor-gen"
 )
 
 // NewFilecoinLedgerTransactor is a utility method to easily create transaction
 // options for use with the Lotus JSON-RPC API and a Ledger USB Wallet with
 // the Filecoin app.
-func NewFilecoinLedgerTransactor(ctx context.Context, api *lotusapi.FullNodeStruct, client *ethclient.Client, from address.Address) (*WrappedEthClient, *bind.TransactOpts, error) {
+func NewFilecoinLedgerTransactor(ctx context.Context, api *lotusapi.FullNodeStruct, client *ethclient.Client, from address.Address, proposer address.Address, proposerPrivateKey []byte, approver address.Address) (*WrappedEthClient, *bind.TransactOpts, error) {
 	wrappedClientImpl := WrappedEthClientForFilLedger{
 		from:            from,
 		api:             api,
 		signedMessage:   make(map[common.Hash]*lotustypes.SignedMessage),
 		filecoinEthHash: make(map[common.Hash]common.Hash),
+		proposer:        proposer,
+		approver:        approver,
 	}
 	wrappedClient := &WrappedEthClient{
 		Client: *client,
@@ -35,7 +41,7 @@ func NewFilecoinLedgerTransactor(ctx context.Context, api *lotusapi.FullNodeStru
 
 	opts := bind.TransactOpts{
 		From: common.Address{}, // unused
-		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
+		Signer: func(_ common.Address, tx *types.Transaction) (*types.Transaction, error) {
 			filecoinToAddr, err := ethtypes.ParseEthAddress(tx.To().String())
 			if err != nil {
 				return nil, err
@@ -52,21 +58,54 @@ func NewFilecoinLedgerTransactor(ctx context.Context, api *lotusapi.FullNodeStru
 			}
 			calldata := buffer.Bytes()
 
-			proposeMsg := &lotustypes.Message{
-				From:       from,
-				To:         delegatedToAddr,
-				GasLimit:   int64(tx.Gas()),
-				GasFeeCap:  lotusbig.NewFromGo(tx.GasFeeCap()),
-				GasPremium: lotusbig.NewFromGo(tx.GasTipCap()),
-				Nonce:      tx.Nonce(),
-				Method:     builtintypes.MethodsEVM.InvokeContract,
-				Value:      lotusbig.NewFromGo(tx.Value()),
-				Params:     calldata,
-			}
+			var signedMsg *lotustypes.SignedMessage
+			if from.Protocol() != address.Actor {
+				// Not msig
+				proposeMsg := &lotustypes.Message{
+					From:       from,
+					To:         delegatedToAddr,
+					GasLimit:   int64(tx.Gas()),
+					GasFeeCap:  filbig.NewFromGo(tx.GasFeeCap()),
+					GasPremium: filbig.NewFromGo(tx.GasTipCap()),
+					Nonce:      tx.Nonce(),
+					Method:     builtintypes.MethodsEVM.InvokeContract,
+					Value:      filbig.NewFromGo(tx.Value()),
+					Params:     calldata,
+				}
 
-			signedMsg, err := SignMsgLedger(proposeMsg)
-			if err != nil {
-				return tx, err
+				signedMsg, err = SignMsgLedger(proposeMsg)
+				if err != nil {
+					return tx, err
+				}
+			} else {
+				// msig
+				enc, actErr := actors.SerializeParams(&multisig0.ProposeParams{
+					To:     delegatedToAddr,
+					Value:  filbig.NewFromGo(tx.Value()),
+					Method: builtin.MethodsEVM.InvokeContract,
+					Params: calldata,
+				})
+
+				if actErr != nil {
+					return nil, actErr
+				}
+
+				proposeMsg := &lotustypes.Message{
+					To:     from,
+					From:   proposer,
+					Value:  filbig.Zero(),
+					Method: builtin.MethodsMultisig.Propose,
+					Params: enc,
+				}
+
+				fmt.Printf("Jim sign msig proposal %+v\n", proposeMsg)
+
+				signedMsg, err = SignMsg(proposerPrivateKey, proposeMsg)
+				if err != nil {
+					return tx, err
+				}
+
+				fmt.Println("FIXME: Sign with proposer private key")
 			}
 
 			wrappedClient.SetSignedMessage(tx.Hash(), signedMsg)
@@ -83,6 +122,8 @@ type WrappedEthClientForFilLedger struct {
 	api             *lotusapi.FullNodeStruct
 	signedMessage   map[common.Hash]*lotustypes.SignedMessage
 	filecoinEthHash map[common.Hash]common.Hash
+	proposer        address.Address
+	approver        address.Address
 }
 
 // PendingNonceAt retrieves the current pending nonce associated with an account.
@@ -117,20 +158,49 @@ func (_Client WrappedEthClientForFilLedger) EstimateGas(ctx context.Context, cal
 	}
 	calldata := buffer.Bytes()
 
-	proposeMsg := &lotustypes.Message{
-		From:       _Client.from,
-		To:         delegatedToAddr,
-		GasFeeCap:  lotusbig.NewFromGo(call.GasFeeCap),
-		GasPremium: lotusbig.NewFromGo(call.GasTipCap),
-		Method:     builtintypes.MethodsEVM.InvokeContract,
-		Value:      lotusbig.NewFromGo(call.Value),
-		Params:     calldata,
+	var proposeMsg *lotustypes.Message
+	if _Client.from.Protocol() != address.Actor {
+		// Not msig
+		proposeMsg = &lotustypes.Message{
+			From:       _Client.from,
+			To:         delegatedToAddr,
+			GasFeeCap:  filbig.NewFromGo(call.GasFeeCap),
+			GasPremium: filbig.NewFromGo(call.GasTipCap),
+			Method:     builtintypes.MethodsEVM.InvokeContract,
+			Value:      filbig.NewFromGo(call.Value),
+			Params:     calldata,
+		}
+	} else {
+		// msig
+		enc, actErr := actors.SerializeParams(&multisig0.ProposeParams{
+			To:     delegatedToAddr,
+			Value:  filbig.NewFromGo(call.Value),
+			Method: builtin.MethodsEVM.InvokeContract,
+			Params: calldata,
+		})
+
+		if actErr != nil {
+			return 0, actErr
+		}
+
+		proposeMsg = &lotustypes.Message{
+			To:     _Client.from,
+			From:   _Client.proposer,
+			Value:  filbig.Zero(),
+			Method: builtin.MethodsMultisig.Propose,
+			Params: enc,
+		}
 	}
+
+	fmt.Printf("Jim EstimateGas %+v\n", proposeMsg)
 
 	msgWithGas, err := _Client.api.GasEstimateMessageGas(ctx, proposeMsg, nil, lotustypes.EmptyTSK)
 	if err != nil {
+		fmt.Printf("Jim EstimateGas err %+v\n", err)
 		return 0, err
 	}
+
+	fmt.Printf("Jim EstimateGas msgWithGas %+v\n", msgWithGas)
 
 	return uint64(msgWithGas.GasLimit), nil
 }

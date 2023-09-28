@@ -14,6 +14,7 @@ import (
 	"github.com/filecoin-project/lotus/api"
 	lotustypes "github.com/filecoin-project/lotus/chain/types"
 	"github.com/glifio/go-wallet-utils/accounts"
+	"github.com/glifio/go-wallet-utils/msigwallet"
 )
 
 // NewWalletTransactor is a utility method to easily create transaction
@@ -51,7 +52,18 @@ func NewWalletTransactor(
 	}
 	if account.IsFil() {
 		from := account.FilAddress
-		wrappedClient, auth, err := NewFilecoinLedgerTransactor(context.Background(), lapi, client, from)
+		var proposerPrivateKey []byte
+		var err error
+		if !proposer.Empty() {
+			w, ok := wallet.(msigwallet.FilMsigLedgerWallet)
+			if ok {
+				proposerPrivateKey, err = w.GetProposerPrivateKey()
+				if err != nil {
+					return nil, nil, err
+				}
+			}
+		}
+		wrappedClient, auth, err := NewFilecoinLedgerTransactor(context.Background(), lapi, client, from, proposer, proposerPrivateKey, approver)
 		return wrappedClient, auth, err
 	}
 	return nil, nil, fmt.Errorf("account not matched")
