@@ -3,7 +3,6 @@ package walletutils
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum"
@@ -15,11 +14,14 @@ import (
 	filbig "github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/builtin"
 	builtintypes "github.com/filecoin-project/go-state-types/builtin"
+	msig12 "github.com/filecoin-project/go-state-types/builtin/v12/multisig"
 	lotusapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/actors"
 	lotustypes "github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/types/ethtypes"
 	multisig0 "github.com/filecoin-project/specs-actors/actors/builtin/multisig"
+	msig2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/multisig"
+	"github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
 )
 
@@ -43,7 +45,6 @@ func NewFilecoinLedgerTransactor(ctx context.Context, api *lotusapi.FullNodeStru
 	opts := bind.TransactOpts{
 		From: common.Address{}, // unused
 		Signer: func(_ common.Address, tx *types.Transaction) (*types.Transaction, error) {
-			fmt.Println("Jim Signer nonce", tx.Nonce())
 			filecoinToAddr, err := ethtypes.ParseEthAddress(tx.To().String())
 			if err != nil {
 				return nil, err
@@ -92,8 +93,6 @@ func NewFilecoinLedgerTransactor(ctx context.Context, api *lotusapi.FullNodeStru
 					return nil, actErr
 				}
 
-				// FIXME: specify nonce
-
 				proposeMsg := &lotustypes.Message{
 					To:         from,
 					From:       proposer,
@@ -105,9 +104,6 @@ func NewFilecoinLedgerTransactor(ctx context.Context, api *lotusapi.FullNodeStru
 					GasFeeCap:  filbig.NewFromGo(tx.GasFeeCap()),
 					GasPremium: filbig.NewFromGo(tx.GasTipCap()),
 				}
-
-				fmt.Printf("Jim private key: %s\n", hex.EncodeToString(proposerPrivateKey))
-				fmt.Printf("Jim sign msig proposal %+v\n", proposeMsg)
 
 				signedMsg, err = SignMsg(proposerPrivateKey, proposeMsg)
 				if err != nil {
@@ -135,7 +131,6 @@ type WrappedEthClientForFilLedger struct {
 
 // PendingNonceAt retrieves the current pending nonce associated with an account.
 func (_Client WrappedEthClientForFilLedger) PendingNonceAt(ctx context.Context, account common.Address) (uint64, error) {
-	fmt.Println("Jim PendingNonceAt", _Client.from)
 	sender := _Client.from
 	if sender.Protocol() == address.Actor {
 		// msig
@@ -205,38 +200,99 @@ func (_Client WrappedEthClientForFilLedger) EstimateGas(ctx context.Context, cal
 		}
 	}
 
-	fmt.Printf("Jim EstimateGas %+v\n", proposeMsg)
-
 	msgWithGas, err := _Client.api.GasEstimateMessageGas(ctx, proposeMsg, nil, lotustypes.EmptyTSK)
 	if err != nil {
-		fmt.Printf("Jim EstimateGas err %+v\n", err)
 		return 0, err
 	}
-
-	fmt.Printf("Jim EstimateGas msgWithGas %+v\n", msgWithGas)
 
 	return uint64(msgWithGas.GasLimit), nil
 }
 
 // SendTransaction injects the transaction into the pending pool for execution.
 func (_Client WrappedEthClientForFilLedger) SendTransaction(ctx context.Context, tx *types.Transaction) error {
-	fmt.Println("Jim SendTransaction")
-
 	signedMessage := _Client.signedMessage[tx.Hash()]
 	delete(_Client.signedMessage, tx.Hash())
 
+	var txCid cid.Cid
+	var err error
+
 	if signedMessage.Message.To.Protocol() == address.Actor {
+		// msig
 		fmt.Println("Sending msig proposal:")
+
+		propCid, err := _Client.api.MpoolPush(ctx, signedMessage)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println("Proposal CID:", propCid)
+
+		// wait for it to get mined into a block
+		lookup, err := _Client.api.StateWaitMsg(ctx, propCid, 0, 900, true)
+		if err != nil {
+			return err
+		}
+
+		if lookup.Receipt.ExitCode != 0 {
+			return fmt.Errorf("Transaction failed with exit code: %d\n", lookup.Receipt.ExitCode)
+		}
+
+		var retval msig2.ProposeReturn
+		if err := retval.UnmarshalCBOR(bytes.NewReader(lookup.Receipt.Return)); err != nil {
+			return fmt.Errorf("failed to unmarshal propose return value: %w", err)
+		}
+		txnID := retval.TxnID
+
+		fmt.Printf("Successful proposal! Transaction ID: %d\n", txnID)
+
+		params := msig12.TxnIDParams{ID: msig12.TxnID(txnID)}
+		enc, err := actors.SerializeParams(&params)
+		if err != nil {
+			return err
+		}
+
+		nonce, err := _Client.api.MpoolGetNonce(ctx, _Client.approver)
+
+		proposeMsg := &lotustypes.Message{
+			To:     signedMessage.Message.To, // msig
+			From:   _Client.approver,
+			Value:  filbig.Zero(),
+			Method: builtin.MethodsMultisig.Approve,
+			Params: enc,
+			Nonce:  nonce,
+			/*
+				GasLimit:   int64(tx.Gas()),
+				GasFeeCap:  filbig.NewFromGo(tx.GasFeeCap()),
+				GasPremium: filbig.NewFromGo(tx.GasTipCap()),
+			*/
+		}
+
+		msgWithGas, err := _Client.api.GasEstimateMessageGas(ctx, proposeMsg, nil, lotustypes.EmptyTSK)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("Jim msgWithGas: %+v\n", msgWithGas)
+
+		signedApproveMsg, err := SignMsgLedger(msgWithGas)
+		if err != nil {
+			return err
+		}
+
+		txCid, err = _Client.api.MpoolPush(ctx, signedApproveMsg)
+		if err != nil {
+			return err
+		}
+		fmt.Println("Approval CID:", txCid)
+	} else {
+		// regular filecoin tx
+		txCid, err = _Client.api.MpoolPush(ctx, signedMessage)
+		if err != nil {
+			return err
+		}
 	}
 
-	cid, err := _Client.api.MpoolPush(ctx, signedMessage)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println("CID:", cid)
-
-	txHashFil, err := _Client.api.EthGetTransactionHashByCid(ctx, cid)
+	txHashFil, err := _Client.api.EthGetTransactionHashByCid(ctx, txCid)
 	if err != nil {
 		return err
 	}

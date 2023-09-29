@@ -45,13 +45,11 @@ func (hub *Hub) AddMsig(msigAddr address.Address, proposer address.Address, appr
 
 // SetManager updates all the wallets with a pointer to a manager for proposer/approver account lookups
 func (hub *Hub) SetManager(manager *accounts.Manager) {
-	fmt.Println("Jim SetManager", manager)
 	newWallets := make([]accounts.Wallet, 0)
 	for _, wallet := range hub.wallets {
 		w := wallet.(FilMsigLedgerWallet)
 		w.manager = manager
 		newWallets = append(newWallets, w)
-		fmt.Printf("Jim SetManager wallet: %+v\n", w)
 	}
 	hub.wallets = newWallets
 }
@@ -80,8 +78,6 @@ func (fw FilMsigLedgerWallet) GetPrivateKeyBytes(account accounts.Account) (priv
 
 func (fw FilMsigLedgerWallet) GetProposerPrivateKey() (privateKey []byte, err error) {
 	acct := accounts.Account{FilAddress: fw.proposer}
-	fmt.Printf("Jim GetProposerPrivateKey: %+v\n", acct)
-	fmt.Printf("Jim GetProposerPrivateKey fw: %+v\n", fw)
 
 	if fw.manager == nil {
 		return []byte{}, fmt.Errorf("manager not set")
@@ -90,8 +86,6 @@ func (fw FilMsigLedgerWallet) GetProposerPrivateKey() (privateKey []byte, err er
 	if err != nil {
 		return []byte{}, err
 	}
-
-	fmt.Println("Jim GetProposerPrivateKey", wallet)
 
 	return wallet.GetPrivateKeyBytes(acct)
 }

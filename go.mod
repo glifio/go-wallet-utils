@@ -5,6 +5,7 @@ go 1.20
 require (
 	github.com/ethereum/go-ethereum v1.12.0
 	github.com/filecoin-project/go-address v1.1.0
+  github.com/filecoin-project/go-state-types v0.12.1
 )
 
 require (
