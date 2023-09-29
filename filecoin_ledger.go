@@ -3,6 +3,7 @@ package walletutils
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum"
@@ -42,6 +43,7 @@ func NewFilecoinLedgerTransactor(ctx context.Context, api *lotusapi.FullNodeStru
 	opts := bind.TransactOpts{
 		From: common.Address{}, // unused
 		Signer: func(_ common.Address, tx *types.Transaction) (*types.Transaction, error) {
+			fmt.Println("Jim Signer nonce", tx.Nonce())
 			filecoinToAddr, err := ethtypes.ParseEthAddress(tx.To().String())
 			if err != nil {
 				return nil, err
@@ -90,22 +92,27 @@ func NewFilecoinLedgerTransactor(ctx context.Context, api *lotusapi.FullNodeStru
 					return nil, actErr
 				}
 
+				// FIXME: specify nonce
+
 				proposeMsg := &lotustypes.Message{
-					To:     from,
-					From:   proposer,
-					Value:  filbig.Zero(),
-					Method: builtin.MethodsMultisig.Propose,
-					Params: enc,
+					To:         from,
+					From:       proposer,
+					Value:      filbig.Zero(),
+					Method:     builtin.MethodsMultisig.Propose,
+					Params:     enc,
+					Nonce:      tx.Nonce(),
+					GasLimit:   int64(tx.Gas()),
+					GasFeeCap:  filbig.NewFromGo(tx.GasFeeCap()),
+					GasPremium: filbig.NewFromGo(tx.GasTipCap()),
 				}
 
+				fmt.Printf("Jim private key: %s\n", hex.EncodeToString(proposerPrivateKey))
 				fmt.Printf("Jim sign msig proposal %+v\n", proposeMsg)
 
 				signedMsg, err = SignMsg(proposerPrivateKey, proposeMsg)
 				if err != nil {
 					return tx, err
 				}
-
-				fmt.Println("FIXME: Sign with proposer private key")
 			}
 
 			wrappedClient.SetSignedMessage(tx.Hash(), signedMsg)
@@ -128,7 +135,13 @@ type WrappedEthClientForFilLedger struct {
 
 // PendingNonceAt retrieves the current pending nonce associated with an account.
 func (_Client WrappedEthClientForFilLedger) PendingNonceAt(ctx context.Context, account common.Address) (uint64, error) {
-	nonce, err := _Client.api.MpoolGetNonce(ctx, _Client.from)
+	fmt.Println("Jim PendingNonceAt", _Client.from)
+	sender := _Client.from
+	if sender.Protocol() == address.Actor {
+		// msig
+		sender = _Client.proposer
+	}
+	nonce, err := _Client.api.MpoolGetNonce(ctx, sender)
 	if err != nil {
 		return 0, err
 	}
@@ -207,14 +220,21 @@ func (_Client WrappedEthClientForFilLedger) EstimateGas(ctx context.Context, cal
 
 // SendTransaction injects the transaction into the pending pool for execution.
 func (_Client WrappedEthClientForFilLedger) SendTransaction(ctx context.Context, tx *types.Transaction) error {
+	fmt.Println("Jim SendTransaction")
 
 	signedMessage := _Client.signedMessage[tx.Hash()]
 	delete(_Client.signedMessage, tx.Hash())
+
+	if signedMessage.Message.To.Protocol() == address.Actor {
+		fmt.Println("Sending msig proposal:")
+	}
 
 	cid, err := _Client.api.MpoolPush(ctx, signedMessage)
 	if err != nil {
 		return err
 	}
+
+	fmt.Println("CID:", cid)
 
 	txHashFil, err := _Client.api.EthGetTransactionHashByCid(ctx, cid)
 	if err != nil {

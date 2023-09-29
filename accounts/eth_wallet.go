@@ -28,6 +28,6 @@ func (ew EthWallet) SignTxWithPassphrase(a Account, passphrase string, tx *types
 }
 
 // GetPrivateKeyBytes returns the private key bytes if available
-func (ew EthWallet) GetPrivateKeyBytes(account Account, passphrase string) (privateKey []byte, err error) {
+func (ew EthWallet) GetPrivateKeyBytes(account Account) (privateKey []byte, err error) {
 	return []byte{}, fmt.Errorf("not implemented")
 }

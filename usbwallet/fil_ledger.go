@@ -76,6 +76,6 @@ func (fw FilLedgerWallet) SignTxWithPassphrase(a accounts.Account, passphrase st
 }
 
 // GetPrivateKeyBytes returns the private key bytes if available
-func (fw FilLedgerWallet) GetPrivateKeyBytes(account accounts.Account, passphrase string) (privateKey []byte, err error) {
+func (fw FilLedgerWallet) GetPrivateKeyBytes(account accounts.Account) (privateKey []byte, err error) {
 	return []byte{}, fmt.Errorf("not implemented")
 }

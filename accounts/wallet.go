@@ -117,5 +117,5 @@ type Wallet interface {
 	SignTxWithPassphrase(account Account, passphrase string, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error)
 
 	// GetPrivateKeyBytes returns the private key bytes if available
-	GetPrivateKeyBytes(account Account, passphrase string) (privateKey []byte, err error)
+	GetPrivateKeyBytes(account Account) (privateKey []byte, err error)
 }

@@ -45,10 +45,15 @@ func (hub *Hub) AddMsig(msigAddr address.Address, proposer address.Address, appr
 
 // SetManager updates all the wallets with a pointer to a manager for proposer/approver account lookups
 func (hub *Hub) SetManager(manager *accounts.Manager) {
+	fmt.Println("Jim SetManager", manager)
+	newWallets := make([]accounts.Wallet, 0)
 	for _, wallet := range hub.wallets {
 		w := wallet.(FilMsigLedgerWallet)
 		w.manager = manager
+		newWallets = append(newWallets, w)
+		fmt.Printf("Jim SetManager wallet: %+v\n", w)
 	}
+	hub.wallets = newWallets
 }
 
 type FilMsigLedgerWallet struct {
@@ -69,15 +74,18 @@ func (fw FilMsigLedgerWallet) SignTxWithPassphrase(a accounts.Account, passphras
 }
 
 // GetPrivateKeyBytes returns the private key bytes if available
-func (fw FilMsigLedgerWallet) GetPrivateKeyBytes(account accounts.Account, passphrase string) (privateKey []byte, err error) {
+func (fw FilMsigLedgerWallet) GetPrivateKeyBytes(account accounts.Account) (privateKey []byte, err error) {
 	return []byte{}, fmt.Errorf("not implemented")
 }
 
-// GetProposerPrivateKey returns the Filecoin private key for the proposer account
 func (fw FilMsigLedgerWallet) GetProposerPrivateKey() (privateKey []byte, err error) {
-	fmt.Println("Jim GetProposerPrivateKey")
 	acct := accounts.Account{FilAddress: fw.proposer}
+	fmt.Printf("Jim GetProposerPrivateKey: %+v\n", acct)
+	fmt.Printf("Jim GetProposerPrivateKey fw: %+v\n", fw)
 
+	if fw.manager == nil {
+		return []byte{}, fmt.Errorf("manager not set")
+	}
 	wallet, err := fw.manager.Find(acct)
 	if err != nil {
 		return []byte{}, err
@@ -85,17 +93,5 @@ func (fw FilMsigLedgerWallet) GetProposerPrivateKey() (privateKey []byte, err er
 
 	fmt.Println("Jim GetProposerPrivateKey", wallet)
 
-	return []byte{}, nil
-
-	/*
-		ownerProposerKeyJSON, err := ks.Export(ksOwnerProposer, "", "")
-		if err != nil {
-			logFatal(err)
-		}
-		opk, err := keystore.DecryptKey(ownerProposerKeyJSON, "")
-		if err != nil {
-			logFatal(err)
-		}
-		opkPrivateKeyBytes := crypto.FromECDSA(opk.PrivateKey)
-	*/
+	return wallet.GetPrivateKeyBytes(acct)
 }
