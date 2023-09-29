@@ -37,7 +37,6 @@ func (ew EthWalletWrapper) Accounts() []accounts.Account {
 	ethAccounts := ew.Wallet.Accounts()
 	accts := make([]accounts.Account, 0)
 	for _, acct := range ethAccounts {
-		fmt.Printf("Jim1")
 		keyJSON, err := ew.ks.Export(acct, "", "")
 		if err != nil {
 			continue

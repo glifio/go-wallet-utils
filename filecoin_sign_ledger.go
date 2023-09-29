@@ -29,6 +29,7 @@ func SignMsgLedger(msg *types.Message) (*types.SignedMessage, error) {
 	}
 	// fmt.Printf("Message: %x\n", b.RawData())
 
+	fmt.Println("Check your ledger to sign message...")
 	sig, err := fl.SignSECP256K1(p, b.RawData())
 	if err != nil {
 		return nil, err

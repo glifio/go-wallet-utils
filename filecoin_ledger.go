@@ -260,19 +260,12 @@ func (_Client WrappedEthClientForFilLedger) SendTransaction(ctx context.Context,
 			Method: builtin.MethodsMultisig.Approve,
 			Params: enc,
 			Nonce:  nonce,
-			/*
-				GasLimit:   int64(tx.Gas()),
-				GasFeeCap:  filbig.NewFromGo(tx.GasFeeCap()),
-				GasPremium: filbig.NewFromGo(tx.GasTipCap()),
-			*/
 		}
 
 		msgWithGas, err := _Client.api.GasEstimateMessageGas(ctx, proposeMsg, nil, lotustypes.EmptyTSK)
 		if err != nil {
 			return err
 		}
-
-		fmt.Printf("Jim msgWithGas: %+v\n", msgWithGas)
 
 		signedApproveMsg, err := SignMsgLedger(msgWithGas)
 		if err != nil {

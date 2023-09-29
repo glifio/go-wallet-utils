@@ -40,13 +40,9 @@ func (am *Manager) Find(account Account) (Wallet, error) {
 		wrappedEthWallet := EthWallet{ethWallet}
 		return wrappedEthWallet, nil
 	} else {
-		fmt.Printf("Jim backends: %d\n", len(am.filBackends))
-		for i, backend := range am.filBackends {
-			fmt.Printf("Jim backend: %d: %+v\n", i, backend)
+		for _, backend := range am.filBackends {
 			for _, wallet := range backend.Wallets() {
-				fmt.Printf("Jim wallet: %+v\n", wallet)
 				for _, walletAccount := range wallet.Accounts() {
-					fmt.Printf("Jim account: %+v\n", walletAccount)
 					if walletAccount.FilAddress == account.FilAddress {
 						return wallet, nil
 					}

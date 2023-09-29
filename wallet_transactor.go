@@ -57,13 +57,10 @@ func NewWalletTransactor(
 		if !proposer.Empty() {
 			w, ok := wallet.(msigwallet.FilMsigLedgerWallet)
 			if ok {
-				fmt.Printf("Jim NewWalletTransactor msigWallet: %+v\n", w)
 				proposerPrivateKey, err = w.GetProposerPrivateKey()
 				if err != nil {
-					fmt.Printf("Jim9", err)
 					return nil, nil, err
 				}
-				fmt.Printf("Jim10", proposerPrivateKey)
 			}
 		}
 		wrappedClient, auth, err := NewFilecoinLedgerTransactor(context.Background(), lapi, client, from, proposer, proposerPrivateKey, approver)
