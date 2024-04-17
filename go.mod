@@ -2,7 +2,7 @@ module github.com/glifio/go-wallet-utils
 
 go 1.20
 
-require github.com/jimpick/go-ethereum v1.12.1-0.20240416235749-936c2ee98847
+require github.com/jimpick/go-ethereum v1.12.1-0.20240417003055-363296461c72
 
 require (
 	github.com/StackExchange/wmi v0.0.0-20180116203802-5d049714c4a6 // indirect
