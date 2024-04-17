@@ -4,10 +4,10 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/jimpick/go-ethereum/accounts"
+	"github.com/jimpick/go-ethereum/accounts/abi/bind"
+	"github.com/jimpick/go-ethereum/common"
+	"github.com/jimpick/go-ethereum/core/types"
 )
 
 // NewEthWalletTransactor is a utility method to easily create transaction
