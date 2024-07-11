@@ -2,7 +2,6 @@ package walletutils
 
 import (
 	"errors"
-	"fmt"
 	"regexp"
 	"strings"
 
@@ -20,8 +19,8 @@ var (
 )
 
 type KeyStorageShim struct {
-	ks *keystore.KeyStore
-	as *AccountsStorage
+	ks    *keystore.KeyStore
+	cache *Storage
 }
 
 var keyStore *KeyStorageShim
@@ -32,21 +31,44 @@ func KeyStore() *KeyStorageShim {
 
 func NewKeyStore(cfgDir string) error {
 	keydir := cfgDir + "/keystore"
-	accountsStore, err := NewAccountsStore(cfgDir + "/accounts.toml")
-	fmt.Println(keydir, cfgDir+"/accounts.json")
+	cachedir := cfgDir + "/accounts.toml"
+
+	accountStore, err := NewStorage(cachedir, map[string]string{}, true)
 	if err != nil {
 		return err
 	}
+
 	keyStore = &KeyStorageShim{
 		keystore.NewKeyStore(
 			keydir,
 			keystore.StandardScryptN,
 			keystore.StandardScryptP,
 		),
-		accountsStore,
+		accountStore,
 	}
 
 	return nil
+}
+
+// will return true if the account exists in the keystore
+func (store *KeyStorageShim) GetAddr(key string) (interface{}, KeyType, error) {
+	addrStr, ok := store.cache.data[key]
+	if !ok {
+		return "", KeyTypeUnknown, &ErrKeyNotFound{Key: key}
+	}
+
+	// check if the key is an eth address
+	if strings.HasPrefix(addrStr, "0x") {
+		return common.HexToAddress(addrStr), KeyTypeEth, nil
+	}
+
+	// check if the key is a filecoin address
+	filAddr, err := address.NewFromString(addrStr)
+	if err != nil {
+		return "", KeyTypeUnknown, nil
+	}
+
+	return filAddr, KeyTypeFil, nil
 }
 
 func (store *KeyStorageShim) NewAccount(name string, passphrase string, keytype KeyType) (interface{}, error) {
@@ -70,7 +92,7 @@ func (store *KeyStorageShim) NewReadOnlyAccount(name string, addr string) error 
 		return ErrInvalidKeyName
 	}
 
-	return store.as.Set(name, addr)
+	return store.cache.Set(name, addr)
 }
 
 func (store *KeyStorageShim) NewFilAccount(name string, passphrase string) (address.Address, error) {
@@ -95,7 +117,7 @@ func (store *KeyStorageShim) NewFilAccount(name string, passphrase string) (addr
 		return address.Undef, err
 	}
 
-	if err := store.as.SetFilAddr(name, filAddr, account.Address); err != nil {
+	if err := store.SetFilAddr(name, filAddr, account.Address); err != nil {
 		return address.Undef, err
 	}
 
@@ -108,7 +130,7 @@ func (store *KeyStorageShim) NewEthAccount(name string, passphrase string) (acco
 		return accounts.Account{}, err
 	}
 
-	if err := store.as.SetEthAddr(name, account.Address); err != nil {
+	if err := store.SetEthAddr(name, account.Address); err != nil {
 		return accounts.Account{}, err
 	}
 
@@ -127,7 +149,7 @@ func (store *KeyStorageShim) HasKeyForAddress(addr interface{}, keytype KeyType)
 	} else {
 		// here we have to lookup the associated eth addr for this fil addr, and check if we have a key for it
 		filAddr := addr.(address.Address)
-		ethAddrAssociate, err := store.as.Get(filAddr.String())
+		ethAddrAssociate, err := store.cache.Get(filAddr.String())
 		if err != nil {
 			return false
 		}
@@ -145,7 +167,7 @@ type AccountListEntry struct {
 }
 
 func (store *KeyStorageShim) List(includeReadOnly bool) ([]AccountListEntry, error) {
-	allNames := store.as.AccountNames()
+	allNames := store.cache.AccountNames()
 	var entries []AccountListEntry
 
 	for _, name := range allNames {
@@ -155,7 +177,7 @@ func (store *KeyStorageShim) List(includeReadOnly bool) ([]AccountListEntry, err
 			continue
 		}
 
-		addr, keytype, err := store.as.GetAddr(name)
+		addr, keytype, err := store.GetAddr(name)
 		if err != nil {
 			return nil, err
 		}
@@ -170,4 +192,39 @@ func (store *KeyStorageShim) List(includeReadOnly bool) ([]AccountListEntry, err
 	}
 
 	return entries, nil
+}
+
+func (store *KeyStorageShim) GetFilAddr(key string) (address.Address, error) {
+	addr, err := store.cache.Get(key)
+	if err != nil || addr == "" {
+		return address.Address{}, err
+	}
+	return address.NewFromString(addr)
+}
+
+func (store *KeyStorageShim) GetEthAddr(key string) (common.Address, error) {
+	addr, err := store.cache.Get(key)
+	if err != nil || addr == "" {
+		return common.Address{}, err
+	}
+	return common.HexToAddress(addr), nil
+}
+
+func (store *KeyStorageShim) SetFilAddr(key string, filAddr address.Address, evmAddr common.Address) error {
+	if err := store.cache.Set(key, filAddr.String()); err != nil {
+		return err
+	}
+	// when we set the fil address, we need to also set a mapping from f1 => 0x address to access the correct keystore file
+	if err := store.cache.Set(filAddr.String(), evmAddr.Hex()); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (store *KeyStorageShim) SetEthAddr(key string, evmAddr common.Address) error {
+	if err := store.cache.Set(key, evmAddr.Hex()); err != nil {
+		return err
+	}
+
+	return nil
 }
