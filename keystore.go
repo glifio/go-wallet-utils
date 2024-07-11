@@ -68,18 +68,13 @@ func (store *KeyStorageShim) GetAddr(key string) (interface{}, KeyType, error) {
 	// check if the key is a filecoin address
 	filAddr, err := address.NewFromString(addrStr)
 	if err != nil {
-		return "", KeyTypeUnknown, nil
+		return "", KeyTypeUnknown, err
 	}
 
 	return filAddr, KeyTypeFil, nil
 }
 
 func (store *KeyStorageShim) NewAccount(name string, passphrase string, keytype KeyType) (interface{}, error) {
-	re := regexp.MustCompile(`^[tf][0-9]`)
-	if strings.HasPrefix(name, "0x") || re.MatchString(name) {
-		return nil, ErrKeyAlreadyExists
-	}
-
 	if keytype == KeyTypeEth {
 		return store.NewEthAccount(name, passphrase)
 	} else if keytype == KeyTypeFil {
@@ -90,15 +85,18 @@ func (store *KeyStorageShim) NewAccount(name string, passphrase string, keytype 
 }
 
 func (store *KeyStorageShim) NewReadOnlyAccount(name string, addr string) error {
-	re := regexp.MustCompile(`^[tf][0-9]`)
-	if strings.HasPrefix(name, "0x") || re.MatchString(name) {
-		return ErrInvalidKeyName
+	if err := ValidateKeyName(name); err != nil {
+		return err
 	}
 
 	return store.cache.Set(name, addr)
 }
 
 func (store *KeyStorageShim) NewFilAccount(name string, passphrase string) (address.Address, error) {
+	if err := ValidateKeyName(name); err != nil {
+		return address.Undef, err
+	}
+
 	account, err := store.ks.NewAccount(passphrase)
 	if err != nil {
 		return address.Undef, err
@@ -128,6 +126,10 @@ func (store *KeyStorageShim) NewFilAccount(name string, passphrase string) (addr
 }
 
 func (store *KeyStorageShim) NewEthAccount(name string, passphrase string) (accounts.Account, error) {
+	if err := ValidateKeyName(name); err != nil {
+		return accounts.Account{}, err
+	}
+
 	account, err := store.ks.NewAccount(passphrase)
 	if err != nil {
 		return accounts.Account{}, err
@@ -299,7 +301,11 @@ func (store *KeyStorageShim) Export(name string, passphrase string) ([]byte, err
 }
 
 // imports key type with passphrase into the key store and caches the address
-func (store *KeyStorageShim) Import(name string, keyBytesStr string, passphrase string, keytype KeyType, encryptedJSON bool, encoding string) error {
+func (store *KeyStorageShim) Import(name string, keyBytesStr string, passphrase string, keytype KeyType, encryptedJSON bool) error {
+	if err := ValidateKeyName(name); err != nil {
+		return err
+	}
+
 	// first check to see if we have an existing key with the same name, we won't overwrite it
 	var e *ErrKeyNotFound
 	_, _, err := store.GetAddr(name)
@@ -352,6 +358,62 @@ func (store *KeyStorageShim) Import(name string, keyBytesStr string, passphrase 
 		store.cache.Set(name, account.Address.Hex())
 	} else {
 		return ErrUnsupportedKeyType
+	}
+
+	return nil
+}
+
+func (store *KeyStorageShim) Rename(oldName string, newName string) error {
+	if err := ValidateKeyName(newName); err != nil {
+		return err
+	}
+
+	addrStr, ok := store.cache.data[oldName]
+	if !ok {
+		return &ErrKeyNotFound{Key: oldName}
+	}
+
+	if err := store.cache.Set(newName, addrStr); err != nil {
+		return err
+	}
+
+	if err := store.cache.Delete(oldName); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (store *KeyStorageShim) ChangePassphrase(name string, oldPassphrase string, newPassphrase string) error {
+	addr, keytype, err := store.GetAddr(name)
+	if err != nil {
+		return err
+	}
+
+	var ethAddrToChange string
+	// if the keytype is fil key, we have to change the passphrase of the key's associated eth address derived from the same private key
+	if keytype == KeyTypeFil {
+		ethAddrToChange, err = store.cache.Get(addr.(address.Address).String())
+		if err != nil {
+			return err
+		}
+	} else if keytype == KeyTypeEth {
+		ethAddrToChange = addr.(common.Address).Hex()
+	}
+
+	account, err := store.ks.Find(accounts.Account{Address: common.HexToAddress(ethAddrToChange)})
+	if err != nil {
+		return err
+	}
+
+	return store.ks.Update(account, oldPassphrase, newPassphrase)
+
+}
+
+func ValidateKeyName(name string) error {
+	re := regexp.MustCompile(`^[tf][0-9]`)
+	if strings.HasPrefix(name, "0x") || re.MatchString(name) {
+		return ErrInvalidKeyName
 	}
 
 	return nil
