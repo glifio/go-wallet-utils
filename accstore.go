@@ -11,23 +11,15 @@ type AccountsStorage struct {
 	*Storage
 }
 
-var accountsStore *AccountsStorage
-
-func AccountsStore() *AccountsStorage {
-	return accountsStore
-}
-
-func NewAccountsStore(filename string) error {
+func NewAccountsStore(filename string) (*AccountsStorage, error) {
 	accountsDefault := map[string]string{}
 
 	s, err := NewStorage(filename, accountsDefault, true)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	accountsStore = &AccountsStorage{s}
-
-	return nil
+	return &AccountsStorage{s}, nil
 }
 
 func (a *AccountsStorage) Exists(key string) bool {

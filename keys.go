@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -19,6 +20,34 @@ const (
 	KeyTypeEth
 	KeyTypeFil
 )
+
+func (k KeyType) String() string {
+	return [...]string{"Unknown", "Eth", "Fil"}[k]
+}
+
+func KeyTypeFromString(s string) KeyType {
+	switch strings.ToLower(s) {
+	case "eth":
+		return KeyTypeEth
+	case "fil":
+		return KeyTypeFil
+	default:
+		return KeyTypeUnknown
+	}
+}
+
+func KeyTypeFromAddr(addr string) KeyType {
+	if strings.HasPrefix(addr, "0x") {
+		return KeyTypeEth
+	}
+
+	_, err := address.NewFromString(addr)
+	if err != nil {
+		return KeyTypeUnknown
+	}
+
+	return KeyTypeFil
+}
 
 func DeriveAddrFromPkString(pk string) (common.Address, address.Address, error) {
 	pkECDSA, err := crypto.HexToECDSA(pk)
