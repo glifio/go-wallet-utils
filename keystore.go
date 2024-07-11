@@ -1,6 +1,7 @@
 package walletutils
 
 import (
+	"encoding/hex"
 	"errors"
 	"regexp"
 	"strings"
@@ -8,8 +9,10 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/filecoin-project/go-address"
 	filcrypto "github.com/filecoin-project/go-crypto"
+	"github.com/glifio/glif/v2/util"
 )
 
 var (
@@ -224,6 +227,131 @@ func (store *KeyStorageShim) SetFilAddr(key string, filAddr address.Address, evm
 func (store *KeyStorageShim) SetEthAddr(key string, evmAddr common.Address) error {
 	if err := store.cache.Set(key, evmAddr.Hex()); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (store *KeyStorageShim) Delete(name string, passphrase string) error {
+	addr, keytype, err := store.GetAddr(name)
+	if err != nil {
+		return err
+	}
+
+	var ethAddrToRemove string
+	// if the keytype is fil key, we have to delete the key's associated eth address derived from the same private key
+	if keytype == KeyTypeFil {
+		ethAddrToRemove, err = store.cache.Get(addr.(address.Address).String())
+		if err != nil {
+			return err
+		}
+	} else if keytype == KeyTypeEth {
+		ethAddrToRemove = addr.(common.Address).Hex()
+	}
+
+	account, err := store.ks.Find(accounts.Account{Address: common.HexToAddress(ethAddrToRemove)})
+	if err != nil {
+		return err
+	}
+	// delete the account from keystore
+	if err := store.ks.Delete(account, passphrase); err != nil {
+		return err
+	}
+
+	// delete the account from the cache
+	if err := store.cache.Delete(name); err != nil {
+		return err
+	}
+
+	// if the keytype was a filecoin key, we need to delete the mapping from fil address to eth address
+	if keytype == KeyTypeFil {
+		if err := store.cache.Delete(addr.(address.Address).String()); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (store *KeyStorageShim) Export(name string, passphrase string) ([]byte, error) {
+	addr, keytype, err := store.GetAddr(name)
+	if err != nil {
+		return nil, err
+	}
+
+	var ethAddrToExport string
+	// if the keytype is fil key, we have to export the key's associated eth address derived from the same private key
+	if keytype == KeyTypeFil {
+		ethAddrToExport, err = store.cache.Get(addr.(address.Address).String())
+		if err != nil {
+			return nil, err
+		}
+	} else if keytype == KeyTypeEth {
+		ethAddrToExport = addr.(common.Address).Hex()
+	}
+
+	account, err := store.ks.Find(accounts.Account{Address: common.HexToAddress(ethAddrToExport)})
+	if err != nil {
+		return nil, err
+	}
+
+	return store.ks.Export(account, passphrase, passphrase)
+}
+
+// imports key type with passphrase into the key store and caches the address
+func (store *KeyStorageShim) Import(name string, keyBytesStr string, passphrase string, keytype KeyType, encryptedJSON bool, encoding string) error {
+	// first check to see if we have an existing key with the same name, we won't overwrite it
+	var e *ErrKeyNotFound
+	_, _, err := store.GetAddr(name)
+	if !errors.As(err, &e) {
+		return ErrKeyAlreadyExists
+	}
+
+	var account accounts.Account
+	if encryptedJSON {
+		keyBytes, err := hex.DecodeString(keyBytesStr)
+		if err != nil {
+			return err
+		}
+
+		account, err = util.KeyStore().Import(keyBytes, passphrase, passphrase)
+		if err != nil {
+			return err
+		}
+	} else {
+		pkECDSA, err := crypto.HexToECDSA(keyBytesStr)
+		if err != nil {
+			return err
+		}
+
+		account, err = store.ks.ImportECDSA(pkECDSA, passphrase)
+		if err != nil {
+			return err
+		}
+	}
+
+	// if the keytype is a fil key, we need to cache the mapping from the fil address to the eth address
+	if keytype == KeyTypeFil {
+		keyJSON, err := store.ks.Export(account, passphrase, passphrase)
+		if err != nil {
+			return err
+		}
+
+		key, err := keystore.DecryptKey(keyJSON, passphrase)
+		if err != nil {
+			return err
+		}
+
+		filAddr, err := address.NewSecp256k1Address(filcrypto.PublicKey(key.PrivateKey.D.Bytes()))
+		if err != nil {
+			return err
+		}
+		store.cache.Set(filAddr.String(), account.Address.Hex())
+		store.cache.Set(name, filAddr.String())
+	} else if keytype == KeyTypeEth {
+		store.cache.Set(name, account.Address.Hex())
+	} else {
+		return ErrUnsupportedKeyType
 	}
 
 	return nil
