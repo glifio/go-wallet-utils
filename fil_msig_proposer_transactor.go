@@ -163,6 +163,15 @@ func (c *EthClientShimFilMsigProposer) EstimateGas(ctx context.Context, call eth
 		return 0, err
 	}
 
+	state, err := c.api.StateCall(ctx, msgWithGas, lotustypes.EmptyTSK)
+	if err != nil {
+		return 0, err
+	}
+
+	if err := recursiveSubcallErrorThrown(&state.ExecutionTrace); err != nil {
+		return 0, err
+	}
+
 	return uint64(msgWithGas.GasLimit), nil
 }
 
