@@ -26,7 +26,6 @@ func (k KeyType) String() string {
 }
 
 func KeyTypeFromString(s string) KeyType {
-	fmt.Println("String: ", s)
 	switch strings.ToLower(s) {
 	case "eth":
 		return KeyTypeEth

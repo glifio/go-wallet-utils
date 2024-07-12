@@ -26,12 +26,12 @@ func NewEthWalletTransactor(wallet accounts.Wallet, account *accounts.Account, p
 
 	shimImpl := &EthClientShimEthEoa{ethClient: ethClient}
 
-	shim := &EthClientShim{
+	shimmedEthClient := &EthClientShim{
 		Client: ethClient,
-		impl:   shimImpl,
+		shim:   shimImpl,
 	}
 
-	return shim, &bind.TransactOpts{
+	opts := &bind.TransactOpts{
 		From: account.Address,
 		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
 			if address != account.Address {
@@ -40,7 +40,9 @@ func NewEthWalletTransactor(wallet accounts.Wallet, account *accounts.Account, p
 			return wallet.SignTxWithPassphrase(*account, passphrase, tx, chainID)
 		},
 		Context: context.Background(),
-	}, nil
+	}
+
+	return shimmedEthClient, opts, nil
 }
 
 // EthClientShimEthEoa does not actually shim the ethclient, it just provides type consistency for consumers of this package

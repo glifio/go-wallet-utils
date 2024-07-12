@@ -18,21 +18,21 @@ type EthClientShimMethods interface {
 
 type EthClientShim struct {
 	*ethclient.Client
-	impl EthClientShimMethods
+	shim EthClientShimMethods
 }
 
 func (c *EthClientShim) PendingNonceAt(ctx context.Context, account common.Address) (uint64, error) {
-	return c.impl.PendingNonceAt(ctx, account)
+	return c.shim.PendingNonceAt(ctx, account)
 }
 
 func (c *EthClientShim) EstimateGas(ctx context.Context, call ethereum.CallMsg) (gas uint64, err error) {
-	return c.impl.EstimateGas(ctx, call)
+	return c.shim.EstimateGas(ctx, call)
 }
 
 func (c *EthClientShim) SendTransaction(ctx context.Context, tx *types.Transaction) error {
-	return c.impl.SendTransaction(ctx, tx)
+	return c.shim.SendTransaction(ctx, tx)
 }
 
 func (c *EthClientShim) GetOuterTxHash(innerHash common.Hash) common.Hash {
-	return c.impl.GetOuterTxHash(innerHash)
+	return c.shim.GetOuterTxHash(innerHash)
 }

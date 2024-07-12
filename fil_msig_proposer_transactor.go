@@ -44,12 +44,12 @@ func NewFilMsigProposerWalletTransactor(
 		signedMsgCache: NewSignedMsgCache(),
 	}
 
-	shim := &EthClientShim{
+	shimmedEthClient := &EthClientShim{
 		Client: client,
-		impl:   shimImpl,
+		shim:   shimImpl,
 	}
 
-	opts := bind.TransactOpts{
+	opts := &bind.TransactOpts{
 		From: common.Address{}, // unused
 		Signer: func(_ common.Address, tx *types.Transaction) (*types.Transaction, error) {
 			// get the address of the FEVM smart contract we want to send a msig proposal to
@@ -106,7 +106,7 @@ func NewFilMsigProposerWalletTransactor(
 		},
 		Context: ctx,
 	}
-	return shim, &opts, nil
+	return shimmedEthClient, opts, nil
 }
 
 func (c *EthClientShimFilMsigProposer) PendingNonceAt(ctx context.Context, _ common.Address) (uint64, error) {
