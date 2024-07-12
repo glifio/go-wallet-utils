@@ -13,26 +13,29 @@ import (
 	filbig "github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/builtin"
 	lapi "github.com/filecoin-project/lotus/api"
-	"github.com/filecoin-project/lotus/chain/actors"
 	lotustypes "github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/types/ethtypes"
-	multisig0 "github.com/filecoin-project/specs-actors/actors/builtin/multisig"
 	cbg "github.com/whyrusleeping/cbor-gen"
 )
 
-func NewFilecoinMsigProposerWalletTransactor(
+type EthClientShimFilEoa struct {
+	EthClientShimMethods
+	from           address.Address
+	api            *lapi.FullNodeStruct
+	signedMsgCache *SignedMessageCache
+}
+
+func NewFilEoaWalletTransactor(
 	ctx context.Context,
 	api *lapi.FullNodeStruct,
 	client *ethclient.Client,
 	from address.Address,
 	fromPrivateKey []byte,
-	msig address.Address,
 	passphrase string,
 ) (*EthClientShim, *bind.TransactOpts, error) {
-	shimImpl := &EthClientShimFilMsigProposerWallet{
+	shimImpl := &EthClientShimFilEoa{
 		from:           from,
 		api:            api,
-		msig:           msig,
 		signedMsgCache: NewSignedMsgCache(),
 	}
 
@@ -62,32 +65,19 @@ func NewFilecoinMsigProposerWalletTransactor(
 			}
 			calldata := buffer.Bytes()
 
-			var signedMsg *lotustypes.SignedMessage
-			// msig
-			enc, actErr := actors.SerializeParams(&multisig0.ProposeParams{
-				To:     delegatedToAddr,
-				Value:  filbig.NewFromGo(tx.Value()),
-				Method: builtin.MethodsEVM.InvokeContract,
-				Params: calldata,
-			})
-
-			if actErr != nil {
-				return nil, actErr
-			}
-
-			proposeMsg := &lotustypes.Message{
-				To:         msig,
+			filMsg := &lotustypes.Message{
+				To:         delegatedToAddr,
 				From:       from,
-				Value:      filbig.Zero(),
-				Method:     builtin.MethodsMultisig.Propose,
-				Params:     enc,
+				Value:      filbig.NewFromGo(tx.Value()),
+				Method:     builtin.MethodsEVM.InvokeContract,
+				Params:     calldata,
 				Nonce:      tx.Nonce(),
 				GasLimit:   int64(tx.Gas()),
 				GasFeeCap:  filbig.NewFromGo(tx.GasFeeCap()),
 				GasPremium: filbig.NewFromGo(tx.GasTipCap()),
 			}
 
-			signedMsg, err = SignMsg(fromPrivateKey, proposeMsg)
+			signedMsg, err := SignMsg(fromPrivateKey, filMsg)
 			if err != nil {
 				return tx, err
 			}
@@ -101,15 +91,7 @@ func NewFilecoinMsigProposerWalletTransactor(
 	return shim, &opts, nil
 }
 
-type EthClientShimFilMsigProposerWallet struct {
-	EthClientShimMethods
-	from           address.Address
-	api            *lapi.FullNodeStruct
-	msig           address.Address
-	signedMsgCache *SignedMessageCache
-}
-
-func (c *EthClientShimFilMsigProposerWallet) PendingNonceAt(ctx context.Context, _ common.Address) (uint64, error) {
+func (c *EthClientShimFilEoa) PendingNonceAt(ctx context.Context, _ common.Address) (uint64, error) {
 	nonce, err := c.api.MpoolGetNonce(ctx, c.from)
 	if err != nil {
 		return 0, err
@@ -118,7 +100,7 @@ func (c *EthClientShimFilMsigProposerWallet) PendingNonceAt(ctx context.Context,
 	return nonce, nil
 }
 
-func (c *EthClientShimFilMsigProposerWallet) EstimateGas(ctx context.Context, call ethereum.CallMsg) (uint64, error) {
+func (c *EthClientShimFilEoa) EstimateGas(ctx context.Context, call ethereum.CallMsg) (uint64, error) {
 	// call.To is the fevm smart contract we wish to transact with
 	filecoinToAddr, err := ethtypes.ParseEthAddress(call.To.String())
 	if err != nil {
@@ -136,29 +118,15 @@ func (c *EthClientShimFilMsigProposerWallet) EstimateGas(ctx context.Context, ca
 	}
 	calldata := buffer.Bytes()
 
-	var proposeMsg *lotustypes.Message
-
-	// serialize the inner msig proposal params
-	enc, actErr := actors.SerializeParams(&multisig0.ProposeParams{
+	msg := &lotustypes.Message{
 		To:     delegatedToAddr,
+		From:   c.from,
 		Value:  filbig.NewFromGo(call.Value),
 		Method: builtin.MethodsEVM.InvokeContract,
 		Params: calldata,
-	})
-
-	if actErr != nil {
-		return 0, actErr
 	}
 
-	proposeMsg = &lotustypes.Message{
-		To:     c.msig,
-		From:   c.from,
-		Value:  filbig.Zero(),
-		Method: builtin.MethodsMultisig.Propose,
-		Params: enc,
-	}
-
-	msgWithGas, err := c.api.GasEstimateMessageGas(ctx, proposeMsg, nil, lotustypes.EmptyTSK)
+	msgWithGas, err := c.api.GasEstimateMessageGas(ctx, msg, nil, lotustypes.EmptyTSK)
 	if err != nil {
 		return 0, err
 	}
@@ -166,14 +134,29 @@ func (c *EthClientShimFilMsigProposerWallet) EstimateGas(ctx context.Context, ca
 	return uint64(msgWithGas.GasLimit), nil
 }
 
-func (c *EthClientShimFilMsigProposerWallet) SendTransaction(ctx context.Context, tx *types.Transaction) error {
+func (c *EthClientShimFilEoa) SendTransaction(ctx context.Context, tx *types.Transaction) error {
 	signedMessage := c.signedMsgCache.Get(tx.Hash())
 	c.signedMsgCache.Delete(tx.Hash())
 
 	// regular filecoin tx
-	if _, err := c.api.MpoolPush(ctx, signedMessage); err != nil {
+	cid, err := c.api.MpoolPush(ctx, signedMessage)
+	if err != nil {
 		return err
 	}
 
+	filtx, err := c.api.EthGetTransactionHashByCid(ctx, cid)
+	if err != nil {
+		return err
+	}
+
+	filTxHash := common.Hash{}
+	filTxHash.UnmarshalText([]byte(filtx.String()))
+
+	c.signedMsgCache.MapHash(tx.Hash(), filTxHash)
+
 	return nil
+}
+
+func (c *EthClientShimFilEoa) GetOuterTxHash(innerHash common.Hash) common.Hash {
+	return c.signedMsgCache.GetOuterHash(innerHash)
 }

@@ -1,5 +1,10 @@
 package walletutils
 
+import (
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+)
+
 type TransactorType int
 
 const (
@@ -20,4 +25,13 @@ func TransactorTypeFromString(s string) TransactorType {
 	default:
 		return TransactorTypeUnknown
 	}
+}
+
+type TransactionShim struct {
+	*types.Transaction
+	hash common.Hash
+}
+
+func (t *TransactionShim) Hash() common.Hash {
+	return t.hash
 }

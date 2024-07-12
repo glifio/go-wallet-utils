@@ -13,6 +13,7 @@ type EthClientShimMethods interface {
 	PendingNonceAt(ctx context.Context, account common.Address) (uint64, error)
 	EstimateGas(ctx context.Context, call ethereum.CallMsg) (gas uint64, err error)
 	SendTransaction(ctx context.Context, tx *types.Transaction) error
+	GetOuterTxHash(tx common.Hash) common.Hash
 }
 
 type EthClientShim struct {
@@ -30,4 +31,8 @@ func (c *EthClientShim) EstimateGas(ctx context.Context, call ethereum.CallMsg) 
 
 func (c *EthClientShim) SendTransaction(ctx context.Context, tx *types.Transaction) error {
 	return c.impl.SendTransaction(ctx, tx)
+}
+
+func (c *EthClientShim) GetOuterTxHash(innerHash common.Hash) common.Hash {
+	return c.impl.GetOuterTxHash(innerHash)
 }

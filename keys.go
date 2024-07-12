@@ -22,10 +22,11 @@ const (
 )
 
 func (k KeyType) String() string {
-	return [...]string{"Unknown", "Eth", "Fil"}[k]
+	return [...]string{"unknown", "eth", "fil"}[k]
 }
 
 func KeyTypeFromString(s string) KeyType {
+	fmt.Println("String: ", s)
 	switch strings.ToLower(s) {
 	case "eth":
 		return KeyTypeEth
