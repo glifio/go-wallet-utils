@@ -54,12 +54,22 @@ func NewKeyStore(cfgDir string) error {
 }
 
 // will return true if the account exists in the keystore
+// here "key" can either be the name of the account, or a fil or evm address
 func (store *KeyStorageShim) GetAddr(key string) (interface{}, KeyType, error) {
-	addrStr, ok := store.cache.data[key]
-	if !ok {
-		return "", KeyTypeUnknown, &ErrKeyNotFound{Key: key}
+	// first check if the key is an account name
+	isAddr := IsAddress(key)
+	var addrStr string
+	if !isAddr {
+		// key is a name
+		addr, ok := store.cache.data[key]
+		if !ok {
+			return "", KeyTypeUnknown, &ErrKeyNotFound{Key: key}
+		}
+		addrStr = addr
+	} else {
+		// key is an address
+		addrStr = key
 	}
-
 	// check if the key is an eth address
 	if strings.HasPrefix(addrStr, "0x") {
 		return common.HexToAddress(addrStr), KeyTypeEth, nil
@@ -197,22 +207,6 @@ func (store *KeyStorageShim) List(includeReadOnly bool) ([]AccountListEntry, err
 	}
 
 	return entries, nil
-}
-
-func (store *KeyStorageShim) GetFilAddr(key string) (address.Address, error) {
-	addr, err := store.cache.Get(key)
-	if err != nil || addr == "" {
-		return address.Address{}, err
-	}
-	return address.NewFromString(addr)
-}
-
-func (store *KeyStorageShim) GetEthAddr(key string) (common.Address, error) {
-	addr, err := store.cache.Get(key)
-	if err != nil || addr == "" {
-		return common.Address{}, err
-	}
-	return common.HexToAddress(addr), nil
 }
 
 func (store *KeyStorageShim) SetFilAddr(key string, filAddr address.Address, evmAddr common.Address) error {
@@ -408,6 +402,11 @@ func (store *KeyStorageShim) ChangePassphrase(name string, oldPassphrase string,
 
 	return store.ks.Update(account, oldPassphrase, newPassphrase)
 
+}
+
+func IsAddress(addr string) bool {
+	re := regexp.MustCompile(`^[tf][0-9]`)
+	return strings.HasPrefix(addr, "0x") || re.MatchString(addr)
 }
 
 func ValidateKeyName(name string) error {
