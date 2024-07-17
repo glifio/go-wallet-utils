@@ -12,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/filecoin-project/go-address"
 	filcrypto "github.com/filecoin-project/go-crypto"
-	"github.com/glifio/glif/v2/util"
 )
 
 var (
@@ -26,22 +25,16 @@ type KeyStorageShim struct {
 	cache *Storage
 }
 
-var keyStore *KeyStorageShim
-
-func KeyStore() *KeyStorageShim {
-	return keyStore
-}
-
-func NewKeyStore(cfgDir string) error {
+func NewKeyStore(cfgDir string) (*KeyStorageShim, error) {
 	keydir := cfgDir + "/keystore"
 	cachedir := cfgDir + "/accounts.toml"
 
 	accountStore, err := NewStorage(cachedir, map[string]string{}, true)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	keyStore = &KeyStorageShim{
+	keyStore := &KeyStorageShim{
 		keystore.NewKeyStore(
 			keydir,
 			keystore.StandardScryptN,
@@ -50,7 +43,11 @@ func NewKeyStore(cfgDir string) error {
 		accountStore,
 	}
 
-	return nil
+	return keyStore, nil
+}
+
+func (store *KeyStorageShim) KeyStore() *keystore.KeyStore {
+	return store.ks
 }
 
 // will return true if the account exists in the keystore
@@ -314,7 +311,7 @@ func (store *KeyStorageShim) Import(name string, keyBytesStr string, passphrase 
 			return err
 		}
 
-		account, err = util.KeyStore().Import(keyBytes, passphrase, passphrase)
+		account, err = store.ks.Import(keyBytes, passphrase, passphrase)
 		if err != nil {
 			return err
 		}
