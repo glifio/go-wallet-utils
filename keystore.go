@@ -67,18 +67,7 @@ func (store *KeyStorageShim) GetAddr(key string) (interface{}, KeyType, error) {
 		// key is an address
 		addrStr = key
 	}
-	// check if the key is an eth address
-	if strings.HasPrefix(addrStr, "0x") {
-		return common.HexToAddress(addrStr), KeyTypeEth, nil
-	}
-
-	// check if the key is a filecoin address
-	filAddr, err := address.NewFromString(addrStr)
-	if err != nil {
-		return "", KeyTypeUnknown, err
-	}
-
-	return filAddr, KeyTypeFil, nil
+	return GetGenericAddr(addrStr)
 }
 
 func (store *KeyStorageShim) NewAccount(name string, passphrase string, keytype KeyType) (interface{}, error) {
