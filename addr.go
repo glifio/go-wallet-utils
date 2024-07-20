@@ -85,3 +85,17 @@ func GetEthAddr(ctx context.Context, addrStr string, lapi api.FullNode) (common.
 
 	return common.Address{}, ErrUnsupportedKeyType
 }
+
+func GetEthFilAddr(ctx context.Context, addr string, lapi api.FullNode) (common.Address, address.Address, error) {
+	filAddr, err := GetFilAddr(ctx, addr, lapi)
+	if err != nil {
+		return common.Address{}, address.Undef, err
+	}
+
+	ethAddr, err := GetEthAddr(ctx, addr, lapi)
+	if err != nil {
+		return common.Address{}, address.Undef, err
+	}
+
+	return ethAddr, filAddr, nil
+}
