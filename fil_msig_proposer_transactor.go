@@ -35,7 +35,6 @@ func NewFilMsigProposerWalletTransactor(
 	from address.Address,
 	fromPrivateKey []byte,
 	msig address.Address,
-	passphrase string,
 ) (*EthClientShim, *bind.TransactOpts, error) {
 	shimImpl := &EthClientShimFilMsigProposer{
 		from:           from,
