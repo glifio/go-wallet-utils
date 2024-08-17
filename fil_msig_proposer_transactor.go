@@ -12,11 +12,11 @@ import (
 	"github.com/filecoin-project/go-address"
 	filbig "github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/builtin"
+	msig14 "github.com/filecoin-project/go-state-types/builtin/v14/multisig"
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/actors"
 	lotustypes "github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/types/ethtypes"
-	multisig0 "github.com/filecoin-project/specs-actors/actors/builtin/multisig"
 	cbg "github.com/whyrusleeping/cbor-gen"
 )
 
@@ -71,7 +71,7 @@ func NewFilMsigProposerWalletTransactor(
 
 			var signedMsg *lotustypes.SignedMessage
 			// msig
-			enc, actErr := actors.SerializeParams(&multisig0.ProposeParams{
+			enc, actErr := actors.SerializeParams(&msig14.ProposeParams{
 				To:     delegatedToAddr,
 				Value:  filbig.NewFromGo(tx.Value()),
 				Method: builtin.MethodsEVM.InvokeContract,
@@ -138,7 +138,7 @@ func (c *EthClientShimFilMsigProposer) EstimateGas(ctx context.Context, call eth
 	var proposeMsg *lotustypes.Message
 
 	// serialize the inner msig proposal params
-	enc, actErr := actors.SerializeParams(&multisig0.ProposeParams{
+	enc, actErr := actors.SerializeParams(&msig14.ProposeParams{
 		To:     delegatedToAddr,
 		Value:  filbig.NewFromGo(call.Value),
 		Method: builtin.MethodsEVM.InvokeContract,
